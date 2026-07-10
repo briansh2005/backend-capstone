@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<section>
+  <article>
+    <h1>Little Lemon Booking</h1>
+    <!--Begin row-->
+    <div class="row">
+      <!--Begin col-->
+      <div class="column">
+          {% csrf_token %}
+          <form method="POST" id="form">
+            <p>
+              <label for="first_name">Name:</label>
+              <input type="text" placeholder="Your Name" maxlength="200" required="" id="first_name">
+            </p>
+            <p>
+            <!-- Step 9: Part one (修正：將 type 改為 "date" 才能觸發 Date Picker 與 JS 賦值) -->
+              <label for="reservation_date">Reservation date:</label>
+              <input type="date" required="" id="reservation_date">
+            </p>
+            <p>
+              <label for="reservation_slot">Reservation time:</label>
+              <select id="reservation_slot">
+                <option value="0" disabled>Select time</option>
+              </select>
+            </p>
+            <button type="button" id="button">Reserve Now</button>
+          </form>
+      </div>
+      <!--End col-->
+
+      <!--Begin col-->
+      <div class="column">
+        <h2>Bookings For <span id="today"></span></h2>
+        <div id="bookings">
+        </div>
+      </div>
+      <!--End col-->
+    </div>
+    <!--End row-->
+  </article>
+</section>
+
+<script>
+  // 自動初始化為今天的日期，並確保 MM 與 DD 雙位數補零符合 HTML 規範
+  const date = new Date()
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  document.getElementById('reservation_date').value = `${yyyy}-${mm}-${dd}`
+
+  console.log(document.getElementById('reservation_date').value)
+  getBookings()
+
+
+  /*  Step 10: Part two (修正：監聽日期欄位的變更，當使用者換日期時自動觸發 getBookings) */
+  document.getElementById('reservation_date').addEventListener('change', getBookings)
+
+
+  function getBookings() {
+    let reserved_slots = []
+    const date = document.getElementById('reservation_date').value
+    document.getElementById('today').innerHTML = date
+
+    fetch("{% url 'bookings' %}" + '?date=' + date)
+      .then(r => r.json())
+      .then(data => {
+        reserved_slots = []
+        bookings = '' // 確保一開始是清空的
+
+        /* Step 11: Part three (渲染右側預約清單) */
+        for (const item of data) {
+          console.log(item.fields)
+          // 將已被預約的時段數字塞入陣列
+          reserved_slots.push(item.fields.reservation_slot)
+
+          // 💡 關鍵點：請確保這裡使用的是 += (累加字串)，而不是 = (會把前面的資料覆蓋掉)
+          bookings += `<p>${item.fields.first_name} - ${formatTime(item.fields.reservation_slot)}</p>`
+        }
+
+        /* Step 12: Part four (產生時間下拉選單選項) */
+        let slot_options = '<option value="0" disabled>Select time</option>'
+        for (let i = 11; i < 20; i++) {
+          const label = formatTime(i)
+          if (reserved_slots.includes(i) === true) {
+            slot_options += `<option value=${i} disabled>${label}</option>`
+          } else {
+            slot_options += `<option value=${i}>${label}</option>`
+          }
+        }
+
+        // 將產生的選項塞回下拉選單
+        document.getElementById('reservation_slot').innerHTML = slot_options
+
+        // 如果該日期沒有任何人預約，則顯示 No bookings
+        if (bookings == '') {
+          bookings = "No bookings"
+        }
+        // 將畫面的 HTML 內容替換為最新的預約清單
+        document.getElementById('bookings').innerHTML = bookings
+      })
+  }
+
+  function formatTime(time) {
+    const ampm = time < 12 ? 'AM' : 'PM'
+    const t = time < 12 ? time : time > 12 ? time - 12 : time
+    const label = `${t} ${ampm}`
+    return label
+  }
+
+  document.getElementById('button').addEventListener('click', function (e) {
+    const formdata = {
+      first_name: document.getElementById('first_name').value,
+      reservation_date: document.getElementById('reservation_date').value,
+      reservation_slot: document.getElementById('reservation_slot').value,
+    }
+
+    fetch("{% url 'bookings' %}", { method: 'post', body: JSON.stringify(formdata) })
+      .then(r => r.text())
+      .then(data => {
+        getBookings()
+      })
+  })
+</script>
+{% endblock %}
